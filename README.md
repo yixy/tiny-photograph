@@ -1,3 +1,10 @@
+
+文件后缀类型：
+
+```shell
+[FileTypeExtension] jpg
+```
+
 日期解析顺序：
 
 ```shell
