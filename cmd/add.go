@@ -4,7 +4,9 @@ Copyright © 2023 yixy <youzhilane01@gmail.com>
 package cmd
 
 import (
+	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"time"
@@ -30,15 +32,16 @@ var addCmd = &cobra.Command{
 		dir := args[0]
 		files, err := os.ReadDir(dir)
 		if err != nil {
-			panic(err)
+			fmt.Printf("Error when fetch the dir : %v\n", err)
+			return
 		}
+
 		for _, file := range files {
-
-			fileInfos := et.ExtractMetadata(fmt.Sprintf("%s/%s", dir, file.Name()))
-
+			fileName := fmt.Sprintf("%s/%s", dir, file.Name())
+			fileInfos := et.ExtractMetadata(fileName)
 			for _, fileInfo := range fileInfos {
 				if fileInfo.Err != nil {
-					fmt.Printf("Error concerning %v: %v\n", fileInfo.File, fileInfo.Err)
+					fmt.Printf("Error when reading file %v: %v\n", fileInfo.File, fileInfo.Err)
 					continue
 				}
 
@@ -52,7 +55,7 @@ var addCmd = &cobra.Command{
 				const FileModifyDate = "FileModifyDate"
 				fileType, ok := fileInfo.Fields[FileTypeExtension].(string)
 				if !ok {
-					fmt.Println("fileType is not string")
+					fmt.Printf("%s fileType is not string", fileName)
 					continue
 				}
 				if strings.ToLower(fileType) == "jpg" {
@@ -74,13 +77,52 @@ var addCmd = &cobra.Command{
 					}
 					fileDate, ok = date.(string)
 					if !ok {
-						fmt.Println("fileDate is not string")
+						fmt.Printf("%s fileDate is not string", fileName)
 						continue
 					}
 					fileDate = fileDate[0:10]
 					fileDate = strings.ReplaceAll(fileDate, ":", "-")
 
-					fmt.Printf("%s [%v] %s \n", file.Name(), dateMark, fileDate)
+					//open file handle
+					f, err := os.Open(fileName)
+					if err != nil {
+						fmt.Printf("Error when open file %s: %v\n", fileName, err)
+						continue
+					}
+					defer f.Close()
+
+					h := md5.New()
+					if _, err = io.Copy(h, f); err != nil {
+						fmt.Printf("Error when hash file %s: %v\n", fileName, err)
+						continue
+					}
+					md5Sum := h.Sum(nil)
+					newFileName := fmt.Sprintf("%s-%x.%s", fileDate, md5Sum, fileType)
+					fmt.Printf("%s [%v] %s\n", file.Name(), dateMark, newFileName)
+
+					src, err := os.Open(fileName)
+					if err != nil {
+						fmt.Printf("Error when open file %s: %v\n", fileName, err)
+						continue
+					}
+					defer src.Close()
+
+					targetDir := fmt.Sprintf("./db/%s", fileDate)
+					err = os.MkdirAll(targetDir, 755)
+					if err != nil {
+						fmt.Printf("Error when mkdir %s", targetDir)
+						return
+					}
+					target, err := os.Create(fmt.Sprintf("%s/%s", targetDir, newFileName))
+					if err != nil {
+						fmt.Printf("Error when open file %s/%s: %v\n", targetDir, newFileName, err)
+						continue
+					}
+					defer target.Close()
+					if _, err = io.Copy(target, src); err != nil {
+						fmt.Printf("Error when copy file %s: %v\n", newFileName, err)
+						return
+					}
 				}
 			}
 		}
