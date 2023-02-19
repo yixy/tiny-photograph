@@ -13,6 +13,7 @@ import (
 
 	"github.com/barasher/go-exiftool"
 	"github.com/spf13/cobra"
+	"github.com/yixy/tiny-photograph/internal"
 )
 
 // addCmd represents the add command
@@ -58,7 +59,7 @@ var addCmd = &cobra.Command{
 					fmt.Printf("%s fileType is not string", fileName)
 					continue
 				}
-				if strings.ToLower(fileType) == "jpg" {
+				if internal.IsTypeMatched(strings.ToLower(fileType)) {
 					if fileInfo.Fields[DateTimeOriginal] != nil {
 						date = fileInfo.Fields[DateTimeOriginal]
 						dateMark = DateTimeOriginal
