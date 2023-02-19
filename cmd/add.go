@@ -46,7 +46,7 @@ var addCmd = &cobra.Command{
 				}
 
 				var date interface{}
-				var fileDate, dateMark string
+				var fileDate, fileTime, dateMark string
 				ok := false
 				const FileTypeExtension = "FileTypeExtension"
 				const DateTimeOriginal = "DateTimeOriginal"
@@ -80,8 +80,10 @@ var addCmd = &cobra.Command{
 						fmt.Printf("%s fileDate is not string", fileName)
 						continue
 					}
-					fileDate = fileDate[0:10]
 					fileDate = strings.ReplaceAll(fileDate, ":", "-")
+					fileDate = strings.ReplaceAll(fileDate, " ", "_")
+					fileTime = fileDate
+					fileDate = fileDate[0:10]
 
 					//open file handle
 					f, err := os.Open(fileName)
@@ -97,7 +99,7 @@ var addCmd = &cobra.Command{
 						continue
 					}
 					md5Sum := h.Sum(nil)
-					newFileName := fmt.Sprintf("%s-%x.%s", fileDate, md5Sum, fileType)
+					newFileName := fmt.Sprintf("%s-%x.%s", fileTime, md5Sum, fileType)
 					fmt.Printf("%s [%v] %s\n", file.Name(), dateMark, newFileName)
 
 					src, err := os.Open(fileName)
@@ -108,7 +110,7 @@ var addCmd = &cobra.Command{
 					defer src.Close()
 
 					targetDir := fmt.Sprintf("./db/%s", fileDate)
-					err = os.MkdirAll(targetDir, 755)
+					err = os.MkdirAll(targetDir, 0755)
 					if err != nil {
 						fmt.Printf("Error when mkdir %s", targetDir)
 						return
