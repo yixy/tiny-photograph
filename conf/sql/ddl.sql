@@ -2,10 +2,12 @@
 CREATE TABLE if not exists file_obj_t (
     md5_hex varchar(32) not null,
     file_name varchar(2000) not null,
+    file_extension varchar(20),
     file_time varchar(19) not null,
     time_zone varchar(6) not null default '+8:00',
     time_origin varchar(2000),
     label varchar(2000),
+    task_id varchar(25),
     create_time BIGINT not null,
     update_time BIGINT not null,
     create_local_time BIGINT not null,

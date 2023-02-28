@@ -14,6 +14,8 @@ import (
 
 const dbFile = env.AppName + ".db"
 
+var workdir string
+
 // The returned DB is safe for concurrent use by multiple goroutines
 // and maintains its own pool of idle connections. Thus, the Open
 // function should be called just once. It is rarely necessary to
@@ -26,21 +28,21 @@ var DB *sql.DB
 
 func init() {
 	var err error
-	DB, err = getConnection()
+	workdir, err = path.GetProgramPath()
+	if err != nil {
+		panic(err)
+	}
+	DB, err = getConnection(workdir)
 	if err != nil {
 		panic(errors.WithMessage(err, "db getConnection error"))
 	}
-	err = ExecuteSqlFile("conf/sql/ddl.sql")
+	err = ExecuteSqlFile(fmt.Sprintf("%s/conf/sql/ddl.sql", workdir))
 	if err != nil {
 		panic(err)
 	}
 }
 
-func getConnection() (*sql.DB, error) {
-	workdir, err := path.GetProgramPath()
-	if err != nil {
-		panic(err)
-	}
+func getConnection(workdir string) (*sql.DB, error) {
 	return sql.Open("sqlite3", fmt.Sprintf("%s/%s?_txlock=exclusive", workdir, dbFile))
 }
 

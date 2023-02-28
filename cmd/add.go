@@ -14,6 +14,7 @@ import (
 	"github.com/barasher/go-exiftool"
 	"github.com/spf13/cobra"
 	"github.com/yixy/tiny-photograph/internal"
+	"github.com/yixy/tiny-photograph/internal/db"
 )
 
 // addCmd represents the add command
@@ -40,6 +41,8 @@ var addCmd = &cobra.Command{
 		for _, file := range files {
 			fileName := fmt.Sprintf("%s/%s", dir, file.Name())
 			fileInfos := et.ExtractMetadata(fileName)
+
+			//only return one file
 			for _, fileInfo := range fileInfos {
 				if fileInfo.Err != nil {
 					fmt.Printf("Error when reading file %v: %v\n", fileInfo.File, fileInfo.Err)
@@ -47,7 +50,7 @@ var addCmd = &cobra.Command{
 				}
 
 				var date interface{}
-				var fileDate, fileTime, dateMark string
+				var fileDate, fileTime, timeOrigin string
 				ok := false
 				const FileTypeExtension = "FileTypeExtension"
 				const DateTimeOriginal = "DateTimeOriginal"
@@ -62,19 +65,19 @@ var addCmd = &cobra.Command{
 				if internal.IsTypeMatched(strings.ToLower(fileType)) {
 					if fileInfo.Fields[DateTimeOriginal] != nil {
 						date = fileInfo.Fields[DateTimeOriginal]
-						dateMark = DateTimeOriginal
+						timeOrigin = DateTimeOriginal
 					} else if fileInfo.Fields[ModifyDate] != nil {
 						date = fileInfo.Fields[ModifyDate]
-						dateMark = ModifyDate
+						timeOrigin = ModifyDate
 					} else if fileInfo.Fields[CreateDate] != nil {
 						date = fileInfo.Fields[CreateDate]
-						dateMark = CreateDate
+						timeOrigin = CreateDate
 					} else if fileInfo.Fields[FileModifyDate] != nil {
 						date = fileInfo.Fields[FileModifyDate]
-						dateMark = FileModifyDate
+						timeOrigin = FileModifyDate
 					} else {
 						date = time.Now().String()
-						dateMark = "sysdate"
+						timeOrigin = "sysdate"
 					}
 					fileDate, ok = date.(string)
 					if !ok {
@@ -101,7 +104,8 @@ var addCmd = &cobra.Command{
 					}
 					md5Sum := h.Sum(nil)
 					newFileName := fmt.Sprintf("%s-%x.%s", fileTime, md5Sum, fileType)
-					fmt.Printf("%s [%v] %s\n", file.Name(), dateMark, newFileName)
+					fmt.Printf("%s [%v] %s\n", file.Name(), timeOrigin, newFileName)
+					err = db.ExecuteSqlFile("conf/sql/dml.sql")
 
 					src, err := os.Open(fileName)
 					if err != nil {
