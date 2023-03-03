@@ -4,9 +4,12 @@ Copyright © 2023 yixy <youzhilane01@gmail.com>
 package cmd
 
 import (
+	"context"
 	"crypto/md5"
+	"database/sql"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/yixy/tiny-photograph/internal"
 	"github.com/yixy/tiny-photograph/internal/db"
+	"github.com/yixy/tiny-photograph/internal/db/model"
 )
 
 // addCmd represents the add command
@@ -44,98 +48,141 @@ var addCmd = &cobra.Command{
 
 			//only return one file
 			for _, fileInfo := range fileInfos {
-				if fileInfo.Err != nil {
-					fmt.Printf("Error when reading file %v: %v\n", fileInfo.File, fileInfo.Err)
-					continue
-				}
-
-				var date interface{}
-				var fileDate, fileTime, timeOrigin string
-				ok := false
-				const FileTypeExtension = "FileTypeExtension"
-				const DateTimeOriginal = "DateTimeOriginal"
-				const ModifyDate = "ModifyDate"
-				const CreateDate = "CreateDate"
-				const FileModifyDate = "FileModifyDate"
-				fileType, ok := fileInfo.Fields[FileTypeExtension].(string)
-				if !ok {
-					fmt.Printf("%s fileType is not string", fileName)
-					continue
-				}
-				if internal.IsTypeMatched(strings.ToLower(fileType)) {
-					if fileInfo.Fields[DateTimeOriginal] != nil {
-						date = fileInfo.Fields[DateTimeOriginal]
-						timeOrigin = DateTimeOriginal
-					} else if fileInfo.Fields[ModifyDate] != nil {
-						date = fileInfo.Fields[ModifyDate]
-						timeOrigin = ModifyDate
-					} else if fileInfo.Fields[CreateDate] != nil {
-						date = fileInfo.Fields[CreateDate]
-						timeOrigin = CreateDate
-					} else if fileInfo.Fields[FileModifyDate] != nil {
-						date = fileInfo.Fields[FileModifyDate]
-						timeOrigin = FileModifyDate
-					} else {
-						date = time.Now().String()
-						timeOrigin = "sysdate"
-					}
-					fileDate, ok = date.(string)
-					if !ok {
-						fmt.Printf("%s fileDate is not string", fileName)
-						continue
-					}
-					fileDate = strings.ReplaceAll(fileDate, ":", "-")
-					fileDate = strings.ReplaceAll(fileDate, " ", "_")
-					fileTime = fileDate
-					fileDate = fileDate[0:10]
-
-					//open file handle
-					f, err := os.Open(fileName)
-					if err != nil {
-						fmt.Printf("Error when open file %s: %v\n", fileName, err)
-						continue
-					}
-					defer f.Close()
-
-					h := md5.New()
-					if _, err = io.Copy(h, f); err != nil {
-						fmt.Printf("Error when hash file %s: %v\n", fileName, err)
-						continue
-					}
-					md5Sum := h.Sum(nil)
-					newFileName := fmt.Sprintf("%s-%x.%s", fileTime, md5Sum, fileType)
-					fmt.Printf("%s [%v] %s\n", file.Name(), timeOrigin, newFileName)
-					err = db.ExecuteSqlFile("conf/sql/dml.sql")
-
-					src, err := os.Open(fileName)
-					if err != nil {
-						fmt.Printf("Error when open file %s: %v\n", fileName, err)
-						continue
-					}
-					defer src.Close()
-
-					targetDir := fmt.Sprintf("./db/%s", fileDate)
-					err = os.MkdirAll(targetDir, 0755)
-					if err != nil {
-						fmt.Printf("Error when mkdir %s", targetDir)
-						return
-					}
-					target, err := os.Create(fmt.Sprintf("%s/%s", targetDir, newFileName))
-					if err != nil {
-						fmt.Printf("Error when open file %s/%s: %v\n", targetDir, newFileName, err)
-						continue
-					}
-					defer target.Close()
-					if _, err = io.Copy(target, src); err != nil {
-						fmt.Printf("Error when copy file %s: %v\n", newFileName, err)
-						return
-					}
-				}
+				dealFile(fileInfo, file, fileName)
 			}
 		}
 	},
 }
 
+func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string) {
+	ctx := context.Background()
+	if fileInfo.Err != nil {
+		fmt.Printf("Error when reading file %v: %v\n", fileInfo.File, fileInfo.Err)
+		return
+	}
+
+	var date interface{}
+	var fileDate, fileTime, timeOrigin string
+	ok := false
+	const FileTypeExtension = "FileTypeExtension"
+	const DateTimeOriginal = "DateTimeOriginal"
+	const ModifyDate = "ModifyDate"
+	const CreateDate = "CreateDate"
+	const FileModifyDate = "FileModifyDate"
+
+	//get fileType
+	fileType, ok := fileInfo.Fields[FileTypeExtension].(string)
+	if !ok {
+		fmt.Printf("%s fileType is not string", fileName)
+		return
+	}
+	if !internal.IsTypeMatched(strings.ToLower(fileType)) {
+		return
+	}
+
+	//get md5Sum
+	src, err := os.Open(fileName)
+	if err != nil {
+		fmt.Printf("Error when open file %s: %v\n", fileName, err)
+		return
+	}
+	defer src.Close()
+	h := md5.New()
+	if _, err = io.Copy(h, src); err != nil {
+		fmt.Printf("Error when hash file %s: %v\n", fileName, err)
+		return
+	}
+	md5Sum := fmt.Sprintf("%x", h.Sum(nil))
+
+	//check is exist
+	fileObj := new(model.FileObj)
+	err = fileObj.Get(ctx, md5Sum)
+	if err == nil {
+		fmt.Printf("file exist: %v\n", fileName)
+		return
+	} else if err != sql.ErrNoRows {
+		fmt.Printf("%s: %v", fileName, err)
+		return
+	}
+
+	now := time.Now()
+	fileObj.Md5Sum = md5Sum
+	fileObj.FileExtension = fileType
+	fileObj.TaskId = now.Format(time.RFC3339Nano)
+	fileObj.ValidFlag = 1
+	unixNano := now.UnixNano()
+	fileObj.CreateTime = unixNano
+	fileObj.UpdateTime = unixNano
+	//Todo
+	fileObj.TimeZone = "+08:00"
+
+	//get fileTime
+	if fileInfo.Fields[DateTimeOriginal] != nil {
+		date = fileInfo.Fields[DateTimeOriginal]
+		timeOrigin = DateTimeOriginal
+	} else if fileInfo.Fields[ModifyDate] != nil {
+		date = fileInfo.Fields[ModifyDate]
+		timeOrigin = ModifyDate
+	} else if fileInfo.Fields[CreateDate] != nil {
+		date = fileInfo.Fields[CreateDate]
+		timeOrigin = CreateDate
+	} else if fileInfo.Fields[FileModifyDate] != nil {
+		date = fileInfo.Fields[FileModifyDate]
+		timeOrigin = FileModifyDate
+	} else {
+		date = time.Now().String()
+		timeOrigin = "sysdate"
+	}
+	fileDate, ok = date.(string)
+	if !ok {
+		fmt.Printf("%s fileDate is not string", fileName)
+		return
+	}
+	fileDate = strings.ReplaceAll(fileDate, ":", "-")
+	fileDate = strings.ReplaceAll(fileDate, " ", "_")
+	fileTime = fileDate
+	fileDate = fileDate[0:10]
+	fileObj.TimeOrigin = timeOrigin
+	fileObj.FileTime = fileTime
+
+	//generate fileName
+	newFileName := fmt.Sprintf("%s-%s.%s", fileTime, md5Sum, fileType)
+	fmt.Printf("%s [%v] %s\n", file.Name(), timeOrigin, newFileName)
+	fileObj.FileName = newFileName
+
+	//copy file
+	src.Seek(0, 0)
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		fmt.Printf("Error when start a sql tx : %v\n", err)
+		return
+	}
+	defer tx.Rollback()
+	err = fileObj.AddWithoutTx(ctx, tx)
+	if err != nil {
+		fmt.Printf("Error when insert file meta data: %v\n", err)
+		return
+	}
+	targetDir := fmt.Sprintf("./db/%s", fileDate)
+	err = os.MkdirAll(targetDir, 0755)
+	if err != nil {
+		fmt.Printf("Error when mkdir %s", targetDir)
+		return
+	}
+	targetPath2File := fmt.Sprintf("%s/%s", targetDir, newFileName)
+	target, err := os.Create(targetPath2File)
+	if err != nil {
+		fmt.Printf("Error when open file %s/%s: %v\n", targetDir, newFileName, err)
+		return
+	}
+	defer target.Close()
+	if _, err = io.Copy(target, src); err != nil {
+		fmt.Printf("Error when copy file %s: %v\n", newFileName, err)
+		return
+	}
+	tx.Commit()
+}
 func init() {
 	rootCmd.AddCommand(addCmd)
 
