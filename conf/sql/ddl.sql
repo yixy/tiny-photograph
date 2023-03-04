@@ -4,6 +4,7 @@ CREATE TABLE if not exists file_obj_t (
     file_name varchar(2000) not null,
     file_extension varchar(20),
     file_time varchar(19) not null,
+    file_date varchar(10) not null,
     time_zone varchar(6) not null default '+8:00',
     time_origin varchar(2000),
     label varchar(2000),
@@ -15,5 +16,5 @@ CREATE TABLE if not exists file_obj_t (
     CONSTRAINT un_file_name UNIQUE (file_name)
 );
 CREATE INDEX if not exists idx_file_obj_t_1 ON file_obj_t (file_name, valid_flag);
-CREATE INDEX if not exists idx_file_obj_t_2 ON file_obj_t (valid_flag,file_time);
+CREATE INDEX if not exists idx_file_obj_t_2 ON file_obj_t (valid_flag,file_date);
 CREATE INDEX if not exists idx_file_obj_t_3 ON file_obj_t (valid_flag,label);

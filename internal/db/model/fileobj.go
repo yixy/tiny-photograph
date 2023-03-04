@@ -13,6 +13,7 @@ type FileObj struct {
 	FileName      string `json:"file_name"`
 	FileExtension string `json:"file_extension"`
 	FileTime      string `json:"file_time"`
+	FileDate      string `json:"file_date"`
 	TimeZone      string `json:"time_zone"`
 	TimeOrigin    string `json:"time_origin"`
 	Label         string `json:"label"`
@@ -28,12 +29,12 @@ var objAddWithoutTx = func(ctx context.Context, tx *sql.Tx, args ...interface{})
 		return errors.New("objAdd:fileObj parse err")
 	}
 
-	stmt, err := tx.PrepareContext(ctx, "insert into file_obj_t(md5_hex,file_name,file_extension,file_time,time_zone,time_origin,label,task_id,create_time,update_time,valid_flag)values(?,?,?,?,?,?,?,?,?,?,?)")
+	stmt, err := tx.PrepareContext(ctx, "insert into file_obj_t(md5_hex,file_name,file_extension,file_time,file_date,time_zone,time_origin,label,task_id,create_time,update_time,valid_flag)values(?,?,?,?,?,?,?,?,?,?,?,?)")
 	if err != nil {
 		return err
 	}
 
-	_, err = stmt.ExecContext(ctx, obj.Md5Sum, obj.FileName, obj.FileExtension, obj.FileTime, obj.TimeZone, obj.TimeOrigin, obj.Label, obj.TaskId, obj.CreateTime, obj.UpdateTime, obj.ValidFlag)
+	_, err = stmt.ExecContext(ctx, obj.Md5Sum, obj.FileName, obj.FileExtension, obj.FileTime, obj.FileDate, obj.TimeZone, obj.TimeOrigin, obj.Label, obj.TaskId, obj.CreateTime, obj.UpdateTime, obj.ValidFlag)
 	if err != nil {
 		return err
 	}
@@ -48,12 +49,12 @@ var objGet = db.ExecuteSql(func(ctx context.Context, tx *sql.Tx, args ...interfa
 		return errors.New("objGet:fileObj parse err")
 	}
 
-	stmt, err := tx.PrepareContext(ctx, "select md5_hex,file_name,file_extension,file_time,time_zone,time_origin,label,task_id,create_time,update_time,valid_flag from file_obj_t where md5_hex=? and valid_flag='1'")
+	stmt, err := tx.PrepareContext(ctx, "select md5_hex,file_name,file_extension,file_time,file_date,time_zone,time_origin,label,task_id,create_time,update_time,valid_flag from file_obj_t where md5_hex=? and valid_flag='1'")
 	if err != nil {
 		return err
 	}
 
-	err = stmt.QueryRowContext(ctx, obj.Md5Sum).Scan(&obj.Md5Sum, &obj.FileName, &obj.FileExtension, &obj.FileTime, &obj.TimeZone, &obj.TimeOrigin, &obj.Label, &obj.TaskId, &obj.CreateTime, &obj.UpdateTime, &obj.ValidFlag)
+	err = stmt.QueryRowContext(ctx, obj.Md5Sum).Scan(&obj.Md5Sum, &obj.FileName, &obj.FileExtension, &obj.FileTime, &obj.FileDate, &obj.TimeZone, &obj.TimeOrigin, &obj.Label, &obj.TaskId, &obj.CreateTime, &obj.UpdateTime, &obj.ValidFlag)
 	if err != nil {
 		return err
 	}

@@ -8,13 +8,10 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/pkg/errors"
-	"github.com/yixy/golang-util/path"
 	"github.com/yixy/tiny-photograph/common/env"
 )
 
 const dbFile = env.AppName + ".db"
-
-var workdir string
 
 // The returned DB is safe for concurrent use by multiple goroutines
 // and maintains its own pool of idle connections. Thus, the Open
@@ -28,15 +25,11 @@ var DB *sql.DB
 
 func init() {
 	var err error
-	workdir, err = path.GetProgramPath()
-	if err != nil {
-		panic(err)
-	}
-	DB, err = getConnection(workdir)
+	DB, err = getConnection(env.Workdir)
 	if err != nil {
 		panic(errors.WithMessage(err, "db getConnection error"))
 	}
-	err = ExecuteSqlFile(fmt.Sprintf("%s/conf/sql/ddl.sql", workdir))
+	err = ExecuteSqlFile(fmt.Sprintf("%s/conf/sql/ddl.sql", env.Workdir))
 	if err != nil {
 		panic(err)
 	}

@@ -1,6 +1,7 @@
 package log
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -12,6 +13,16 @@ import (
 
 var Logger *zap.Logger
 var W zapcore.WriteSyncer
+
+func init() {
+	logDir := fmt.Sprintf(fmt.Sprintf("%s/logs", env.Workdir))
+	err := os.MkdirAll(logDir, 0755)
+	if err != nil {
+		fmt.Printf("Error when mkdir %s", logDir)
+		return
+	}
+	InitLogger(fmt.Sprintf("%s/tiny-photograph.log", logDir))
+}
 
 func InitLogger(logfile string) {
 	Logger = Init(logfile)
@@ -26,7 +37,7 @@ func Init(logfile string) *zap.Logger {
 			Filename:   logfile,
 			MaxSize:    128, // megabytes for MB
 			MaxBackups: 2,
-			MaxAge:     365,    // days
+			MaxAge:     365,  // days
 			Compress:   true, // disabled by default
 		}
 	} else {

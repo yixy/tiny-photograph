@@ -19,7 +19,11 @@ import (
 	"github.com/yixy/tiny-photograph/internal"
 	"github.com/yixy/tiny-photograph/internal/db"
 	"github.com/yixy/tiny-photograph/internal/db/model"
+	"github.com/yixy/tiny-photograph/internal/log"
+	"go.uber.org/zap"
 )
+
+var taskId string
 
 // addCmd represents the add command
 var addCmd = &cobra.Command{
@@ -30,7 +34,7 @@ var addCmd = &cobra.Command{
 
 		et, err := exiftool.NewExiftool()
 		if err != nil {
-			fmt.Printf("Error when intializing: %v\n", err)
+			log.Logger.Error("Error when initializing", zap.Error(err))
 			return
 		}
 		defer et.Close()
@@ -38,9 +42,11 @@ var addCmd = &cobra.Command{
 		dir := args[0]
 		files, err := os.ReadDir(dir)
 		if err != nil {
-			fmt.Printf("Error when fetch the dir : %v\n", err)
+			log.Logger.Error("Error when fetch the dir", zap.Error(err))
 			return
 		}
+
+		taskId = time.Now().Format(time.RFC3339Nano)
 
 		for _, file := range files {
 			fileName := fmt.Sprintf("%s/%s", dir, file.Name())
@@ -51,13 +57,58 @@ var addCmd = &cobra.Command{
 				dealFile(fileInfo, file, fileName)
 			}
 		}
+
+		//statics
+		fmt.Printf("taskId: %s\n", taskId)
+		fmt.Printf("--------------------\n")
+		tx, err := db.DB.Begin()
+		if err != nil {
+			fmt.Printf("statics error: %v \n", err)
+			return
+		}
+		defer tx.Rollback()
+		stmt, err := tx.PrepareContext(context.Background(), "select valid_flag,file_date,count(*) from file_obj_t where task_id=? group by valid_flag,file_date")
+		if err != nil {
+			fmt.Printf("statics error[PrepareContext]: %v \n", err)
+			return
+		}
+		rows, err := stmt.QueryContext(context.Background(), taskId)
+		if err != nil {
+			fmt.Printf("statics error[QueryContext]: %v \n", err)
+			return
+		}
+		defer rows.Close()
+		rowNumImp := 0
+		rowNumIgn := 0
+		for rows.Next() {
+			var flag, cnt int
+			var t string
+			err = rows.Scan(&flag, &t, &cnt)
+			if flag == 1 {
+				rowNumImp += cnt
+				fmt.Printf("%s|import|%10d files\n", t, cnt)
+			} else {
+				rowNumIgn += cnt
+				fmt.Printf("%s|ignore|%10d files\n", t, cnt)
+			}
+			if err != nil {
+				fmt.Printf("statics query rows error: %v", err)
+				continue
+			}
+		}
+		fmt.Printf("--------------------\n")
+		fmt.Printf("total import : %10d\n", rowNumImp)
+		fmt.Printf("total ignore : %10d\n", rowNumIgn)
+		if err := rows.Err(); err != nil {
+			fmt.Printf("statics rows.err: %v", err)
+		}
 	},
 }
 
 func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string) {
 	ctx := context.Background()
 	if fileInfo.Err != nil {
-		fmt.Printf("Error when reading file %v: %v\n", fileInfo.File, fileInfo.Err)
+		log.Logger.Error(fmt.Sprintf("Error when reading file %v: %v\n", fileInfo.File, fileInfo.Err))
 		return
 	}
 
@@ -73,7 +124,7 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	//get fileType
 	fileType, ok := fileInfo.Fields[FileTypeExtension].(string)
 	if !ok {
-		fmt.Printf("%s fileType is not string", fileName)
+		log.Logger.Error(fmt.Sprintf("%s fileType is not string", fileName))
 		return
 	}
 	if !internal.IsTypeMatched(strings.ToLower(fileType)) {
@@ -83,13 +134,13 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	//get md5Sum
 	src, err := os.Open(fileName)
 	if err != nil {
-		fmt.Printf("Error when open file %s: %v\n", fileName, err)
+		log.Logger.Error(fmt.Sprintf("Error when open file %s", fileName), zap.Error(err))
 		return
 	}
 	defer src.Close()
 	h := md5.New()
 	if _, err = io.Copy(h, src); err != nil {
-		fmt.Printf("Error when hash file %s: %v\n", fileName, err)
+		log.Logger.Error(fmt.Sprintf("Error when hash file %s", fileName), zap.Error(err))
 		return
 	}
 	md5Sum := fmt.Sprintf("%x", h.Sum(nil))
@@ -98,17 +149,17 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	fileObj := new(model.FileObj)
 	err = fileObj.Get(ctx, md5Sum)
 	if err == nil {
-		fmt.Printf("file exist: %v\n", fileName)
+		log.Logger.Error(fmt.Sprintf("file exist: %v", fileName))
 		return
 	} else if err != sql.ErrNoRows {
-		fmt.Printf("%s: %v", fileName, err)
+		log.Logger.Error(fileName, zap.Error(err))
 		return
 	}
 
 	now := time.Now()
 	fileObj.Md5Sum = md5Sum
 	fileObj.FileExtension = fileType
-	fileObj.TaskId = now.Format(time.RFC3339Nano)
+	fileObj.TaskId = taskId
 	fileObj.ValidFlag = 1
 	unixNano := now.UnixNano()
 	fileObj.CreateTime = unixNano
@@ -135,7 +186,7 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	}
 	fileDate, ok = date.(string)
 	if !ok {
-		fmt.Printf("%s fileDate is not string", fileName)
+		log.Logger.Error(fmt.Sprintf("%s fileDate is not string", fileName))
 		return
 	}
 	fileDate = strings.ReplaceAll(fileDate, ":", "-")
@@ -144,9 +195,11 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	fileDate = fileDate[0:10]
 	fileObj.TimeOrigin = timeOrigin
 	fileObj.FileTime = fileTime
+	fileObj.FileDate = fileDate
 
 	//generate fileName
 	newFileName := fmt.Sprintf("%s-%s.%s", fileTime, md5Sum, fileType)
+	log.Logger.Info(fmt.Sprintf("%s [%v] %s\n", file.Name(), timeOrigin, newFileName))
 	fmt.Printf("%s [%v] %s\n", file.Name(), timeOrigin, newFileName)
 	fileObj.FileName = newFileName
 
@@ -155,30 +208,30 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 
 	tx, err := db.DB.Begin()
 	if err != nil {
-		fmt.Printf("Error when start a sql tx : %v\n", err)
+		log.Logger.Error("Error when start a sql tx ", zap.Error(err))
 		return
 	}
 	defer tx.Rollback()
 	err = fileObj.AddWithoutTx(ctx, tx)
 	if err != nil {
-		fmt.Printf("Error when insert file meta data: %v\n", err)
+		log.Logger.Error("Error when insert file meta data", zap.Error(err))
 		return
 	}
 	targetDir := fmt.Sprintf("./db/%s", fileDate)
 	err = os.MkdirAll(targetDir, 0755)
 	if err != nil {
-		fmt.Printf("Error when mkdir %s", targetDir)
+		log.Logger.Error(fmt.Sprintf("Error when mkdir %s", targetDir))
 		return
 	}
 	targetPath2File := fmt.Sprintf("%s/%s", targetDir, newFileName)
 	target, err := os.Create(targetPath2File)
 	if err != nil {
-		fmt.Printf("Error when open file %s/%s: %v\n", targetDir, newFileName, err)
+		log.Logger.Error(fmt.Sprintf("Error when open file %s/%s", targetDir, newFileName), zap.Error(err))
 		return
 	}
 	defer target.Close()
 	if _, err = io.Copy(target, src); err != nil {
-		fmt.Printf("Error when copy file %s: %v\n", newFileName, err)
+		log.Logger.Error(fmt.Sprintf("Error when copy file %s", newFileName), zap.Error(err))
 		return
 	}
 	tx.Commit()
