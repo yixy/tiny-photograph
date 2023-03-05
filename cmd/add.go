@@ -24,6 +24,9 @@ import (
 )
 
 var taskId string
+var rowNumImp = 0
+var rowNumIgn = 0
+var rowTotal = 0
 
 // addCmd represents the add command
 var addCmd = &cobra.Command{
@@ -59,6 +62,7 @@ var addCmd = &cobra.Command{
 		}
 
 		//statics
+		log.Logger.Info("statics", zap.Int("total", rowTotal), zap.Int("ignore", rowNumIgn), zap.String("taskId", taskId))
 		fmt.Printf("taskId: %s\n", taskId)
 		fmt.Printf("--------------------\n")
 		tx, err := db.DB.Begin()
@@ -78,27 +82,23 @@ var addCmd = &cobra.Command{
 			return
 		}
 		defer rows.Close()
-		rowNumImp := 0
-		rowNumIgn := 0
 		for rows.Next() {
 			var flag, cnt int
-			var t string
-			err = rows.Scan(&flag, &t, &cnt)
-			if flag == 1 {
-				rowNumImp += cnt
-				fmt.Printf("%s|import|%10d files\n", t, cnt)
-			} else {
-				rowNumIgn += cnt
-				fmt.Printf("%s|ignore|%10d files\n", t, cnt)
-			}
+			var d string
+			err = rows.Scan(&flag, &d, &cnt)
 			if err != nil {
 				fmt.Printf("statics query rows error: %v", err)
 				continue
 			}
+			log.Logger.Info("statics", zap.String("file_date", d), zap.Int("count", cnt), zap.Int("valid_flag", flag))
+			rowNumImp += cnt
+			fmt.Printf("%s|import|%10d files\n", d, cnt)
 		}
 		fmt.Printf("--------------------\n")
-		fmt.Printf("total import : %10d\n", rowNumImp)
-		fmt.Printf("total ignore : %10d\n", rowNumIgn)
+		fmt.Printf("import : %10d\n", rowNumImp)
+		fmt.Printf("ignore: %10d\n", rowNumIgn)
+		fmt.Printf("other failed: %10d\n", rowTotal-rowNumImp-rowNumIgn)
+		fmt.Printf("total ignore: %10d\n", rowTotal)
 		if err := rows.Err(); err != nil {
 			fmt.Printf("statics rows.err: %v", err)
 		}
@@ -107,6 +107,7 @@ var addCmd = &cobra.Command{
 
 func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string) {
 	ctx := context.Background()
+	rowTotal++
 	if fileInfo.Err != nil {
 		log.Logger.Error(fmt.Sprintf("Error when reading file %v: %v\n", fileInfo.File, fileInfo.Err))
 		return
@@ -150,6 +151,7 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	err = fileObj.Get(ctx, md5Sum)
 	if err == nil {
 		log.Logger.Error(fmt.Sprintf("file exist: %v", fileName))
+		rowNumIgn++
 		return
 	} else if err != sql.ErrNoRows {
 		log.Logger.Error(fileName, zap.Error(err))
@@ -236,6 +238,7 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	}
 	tx.Commit()
 }
+
 func init() {
 	rootCmd.AddCommand(addCmd)
 

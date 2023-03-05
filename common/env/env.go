@@ -1,6 +1,8 @@
 package env
 
-import "github.com/yixy/golang-util/path"
+import (
+	"github.com/yixy/golang-util/path"
+)
 
 const AppName = "tiny-photograph"
 
@@ -13,4 +15,5 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
 }
