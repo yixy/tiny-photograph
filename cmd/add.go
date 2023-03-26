@@ -9,8 +9,8 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,24 +42,28 @@ var addCmd = &cobra.Command{
 		}
 		defer et.Close()
 
-		dir := args[0]
-		files, err := os.ReadDir(dir)
-		if err != nil {
-			log.Logger.Error("Error when fetch the dir", zap.Error(err))
-			return
-		}
-
 		taskId = time.Now().Format(time.RFC3339Nano)
 
-		for _, file := range files {
-			fileName := fmt.Sprintf("%s/%s", dir, file.Name())
+		// Use filepath.Walk to traverse the directory
+		filepath.Walk(args[0], func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			// Check if current path refers to a file
+			if info.IsDir() {
+				return nil
+			}
+			baseName := info.Name()
+			//fileName := fmt.Sprintf("%s/%s", path, baseName)
+			fileName := path
 			fileInfos := et.ExtractMetadata(fileName)
 
 			//only return one file
 			for _, fileInfo := range fileInfos {
-				dealFile(fileInfo, file, fileName)
+				dealFile(fileInfo, baseName, fileName)
 			}
-		}
+			return nil
+		})
 
 		//statics
 		log.Logger.Info("statics", zap.Int("total", rowTotal), zap.Int("ignore", rowNumIgn), zap.String("taskId", taskId))
@@ -105,7 +109,7 @@ var addCmd = &cobra.Command{
 	},
 }
 
-func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string) {
+func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) {
 	ctx := context.Background()
 	rowTotal++
 	if fileInfo.Err != nil {
@@ -123,12 +127,18 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 	const FileModifyDate = "FileModifyDate"
 
 	//get fileType
-	fileType, ok := fileInfo.Fields[FileTypeExtension].(string)
+	fileTypeExtension := fileInfo.Fields[FileTypeExtension]
+	if fileTypeExtension == nil {
+		log.Logger.Error(fmt.Sprintf("%s fileType is nil", fileName))
+		return
+	}
+	fileType, ok := fileTypeExtension.(string)
 	if !ok {
 		log.Logger.Error(fmt.Sprintf("%s fileType is not string", fileName))
 		return
 	}
 	if !internal.IsTypeMatched(strings.ToLower(fileType)) {
+		log.Logger.Error(fmt.Sprintf("%s fileType is not matched", fileName))
 		return
 	}
 
@@ -201,8 +211,8 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 
 	//generate fileName
 	newFileName := fmt.Sprintf("%s-%s.%s", fileTime, md5Sum, fileType)
-	log.Logger.Info(fmt.Sprintf("%s [%v] %s\n", file.Name(), timeOrigin, newFileName))
-	fmt.Printf("%s [%v] %s\n", file.Name(), timeOrigin, newFileName)
+	log.Logger.Info(fmt.Sprintf("%s [%v] %s\n", baseName, timeOrigin, newFileName))
+	fmt.Printf("%s [%v] %s\n", baseName, timeOrigin, newFileName)
 	fileObj.FileName = newFileName
 
 	//copy file
@@ -219,7 +229,7 @@ func dealFile(fileInfo exiftool.FileMetadata, file fs.DirEntry, fileName string)
 		log.Logger.Error("Error when insert file meta data", zap.Error(err))
 		return
 	}
-	targetDir := fmt.Sprintf("./db/%s", fileDate)
+	targetDir := fmt.Sprintf("./db/%s", fileDate[0:7])
 	err = os.MkdirAll(targetDir, 0755)
 	if err != nil {
 		log.Logger.Error(fmt.Sprintf("Error when mkdir %s", targetDir))

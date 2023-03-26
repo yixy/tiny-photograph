@@ -1,44 +1,57 @@
 package cfg
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/spf13/viper"
+	"github.com/yixy/tiny-photograph/common/env"
 	"github.com/yixy/tiny-photograph/internal/log"
 	"go.uber.org/zap"
 )
 
 const (
-	PORT             = "PORT"
-	READ_TIMEOUT     = "READ_TIMEOUT"
-	WRITE_TIMEOUT    = "WRITE_TIMEOUT"
-	SHUTDOWN_TIMEOUT = "SHUTDOWN_TIMEOUT"
+	//viper load key is lower case
+	PORT             = "port"
+	READ_TIMEOUT     = "read_timeout"
+	WRITE_TIMEOUT    = "write_timeout"
+	SHUTDOWN_TIMEOUT = "shutdown_timeout"
+	FILE_TYPE        = "file_type"
 )
 
 const TIMEOUT = 20000
 
-var Port string
-var Rtimeout int64
-var Wtimeout int64
-var ShutTimeout int64
+func init() {
+	conFileStr := fmt.Sprintf("%s/conf/config.yml", env.Workdir)
+	fmt.Printf("config file is :%s\n", conFileStr)
+	viper.SetConfigFile(conFileStr)
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(err)
+	}
+}
 
 func CfgCheck() error {
 	log.Logger.Info("========= print config file =========")
 	for _, key := range viper.AllKeys() {
-		log.Logger.Info(zap.Field(key, viper.Get(key)))
+		log.Logger.Info("config item", zap.Any(key, viper.Get(key)))
 	}
 	log.Logger.Info("=========       end         =========")
-	Port = viper.GetString(PORT)
-	Rtimeout = viper.GetInt64(READ_TIMEOUT)
-	Wtimeout = viper.GetInt64(WRITE_TIMEOUT)
-	ShutTimeout = viper.GetInt64(SHUTDOWN_TIMEOUT)
-	if Rtimeout == 0 {
-		Rtimeout = TIMEOUT
+	env.Port = viper.GetString(PORT)
+	env.Rtimeout = viper.GetInt64(READ_TIMEOUT)
+	env.Wtimeout = viper.GetInt64(WRITE_TIMEOUT)
+	env.ShutTimeout = viper.GetInt64(SHUTDOWN_TIMEOUT)
+	if env.Rtimeout == 0 {
+		env.Rtimeout = TIMEOUT
 	}
-	if Wtimeout == 0 {
-		Wtimeout = TIMEOUT
+	if env.Wtimeout == 0 {
+		env.Wtimeout = TIMEOUT
 	}
-	if ShutTimeout == 0 {
-		ShutTimeout = TIMEOUT * 2
+	if env.ShutTimeout == 0 {
+		env.ShutTimeout = TIMEOUT * 2
 	}
+	s := viper.GetString(FILE_TYPE)
+	env.FileTypeList = strings.Split(s, ",")
 	return nil
 }
 

@@ -12,15 +12,26 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/yixy/go-web-demo/common/env"
-	"github.com/yixy/go-web-demo/common/resp"
-	"github.com/yixy/go-web-demo/internal/log"
-	"github.com/yixy/go-web-demo/server/handle"
+	"github.com/yixy/tiny-photograph/common/env"
+	"github.com/yixy/tiny-photograph/common/resp"
+	"github.com/yixy/tiny-photograph/internal/log"
+	"github.com/yixy/tiny-photograph/server/handle"
 	"go.uber.org/zap"
 )
 
 const start_banner string = `
-
+ _   _
+| |_(_)_ __  _   _
+| __| | '_ \| | | |
+| |_| | | | | |_| |
+ \__|_|_| |_|\__, |
+             |___/
+       _           _                              _
+ _ __ | |__   ___ | |_ ___   __ _ _ __ __ _ _ __ | |__
+| '_ \| '_ \ / _ \| __/ _ \ / _| | '__/ _| | '_ \| '_ \
+| |_) | | | | (_) | || (_) | (_| | | | (_| | |_) | | | |
+| .__/|_| |_|\___/ \__\___/ \__, |_|  \__,_| .__/|_| |_|
+|_|                         |___/          |_|
 `
 
 func Start(port string, logFIle *string, isDebug *bool) {
@@ -48,8 +59,8 @@ func Start(port string, logFIle *string, isDebug *bool) {
 	handle.RegistRoute(e)
 
 	g := e.Group("/api")
-	handle.RegistAuthRoute(g)
-	handle.RegistTestRoute(g)
+	//handle.RegistAuthRoute(g)
+	//handle.RegistTestRoute(g)
 
 	log.Logger.Info("router init end.")
 

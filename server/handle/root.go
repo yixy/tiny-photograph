@@ -10,9 +10,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/pkg/errors"
-	"github.com/yixy/go-web-demo/common/env"
-	"github.com/yixy/go-web-demo/common/resp"
 	"github.com/yixy/golang-util/str"
+	"github.com/yixy/tiny-photograph/common/env"
+	"github.com/yixy/tiny-photograph/common/resp"
 )
 
 const (
@@ -29,7 +29,7 @@ func RegistRoute(e *echo.Echo) {
 	//set uuid into http header:  "X-Request-ID"(echo.HeaderXRequestID)
 	e.Use(middleware.RequestIDWithConfig(middleware.RequestIDConfig{
 		Generator: func() string {
-			return uuid.NewString()
+			return uuid.New().String()
 		},
 	}))
 	e.Use(middleware.SecureWithConfig(middleware.SecureConfig{
@@ -77,12 +77,12 @@ func RegistRoute(e *echo.Echo) {
 	})
 }
 
-//signup,login not need session
+// signup,login not need session
 func sessionSkipper(c echo.Context) bool {
 	return str.Match(c.Path(), "/api/v1/users")
 }
 
-//signup,signin not need session check
+// signup,signin not need session check
 func sessionCheckSkipper(c echo.Context) bool {
 	return str.Match(c.Path(), "/api/v1/sessions", "/api/v1/users")
 }

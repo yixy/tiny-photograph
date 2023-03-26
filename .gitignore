@@ -2,3 +2,5 @@
 db/*
 *.db
 tiny-photograph
+logs
+target/*
