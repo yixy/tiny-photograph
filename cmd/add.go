@@ -45,7 +45,7 @@ var addCmd = &cobra.Command{
 		taskId = time.Now().Format(time.RFC3339Nano)
 
 		// Use filepath.Walk to traverse the directory
-		filepath.Walk(args[0], func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(args[0], func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -64,6 +64,10 @@ var addCmd = &cobra.Command{
 			}
 			return nil
 		})
+		if err != nil {
+			log.Logger.Error("Error when travels dir", zap.Error(err))
+			//return
+		}
 
 		//statics
 		log.Logger.Info("statics", zap.Int("total", rowTotal), zap.Int("ignore", rowNumIgn), zap.String("taskId", taskId))
@@ -75,7 +79,7 @@ var addCmd = &cobra.Command{
 			return
 		}
 		defer tx.Rollback()
-		stmt, err := tx.PrepareContext(context.Background(), "select valid_flag,file_date,count(*) from file_obj_t where task_id=? group by valid_flag,file_date")
+		stmt, err := tx.PrepareContext(context.Background(), "select valid_flag,file_month,count(*) from file_obj_t where task_id=? group by valid_flag,file_month")
 		if err != nil {
 			fmt.Printf("statics error[PrepareContext]: %v \n", err)
 			return
@@ -94,7 +98,7 @@ var addCmd = &cobra.Command{
 				fmt.Printf("statics query rows error: %v", err)
 				continue
 			}
-			log.Logger.Info("statics", zap.String("file_date", d), zap.Int("count", cnt), zap.Int("valid_flag", flag))
+			log.Logger.Info("statics", zap.String("file_month", d), zap.Int("count", cnt), zap.Int("valid_flag", flag))
 			rowNumImp += cnt
 			fmt.Printf("%s|import|%10d files\n", d, cnt)
 		}
@@ -176,7 +180,7 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	unixNano := now.UnixNano()
 	fileObj.CreateTime = unixNano
 	fileObj.UpdateTime = unixNano
-	//Todo
+	//TODO
 	fileObj.TimeZone = "+08:00"
 
 	//get fileTime
@@ -196,6 +200,7 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 		date = time.Now().String()
 		timeOrigin = "sysdate"
 	}
+	//TODO : data transfer
 	fileDate, ok = date.(string)
 	if !ok {
 		log.Logger.Error(fmt.Sprintf("%s fileDate is not string", fileName))
@@ -208,6 +213,7 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	fileObj.TimeOrigin = timeOrigin
 	fileObj.FileTime = fileTime
 	fileObj.FileDate = fileDate
+	fileObj.FileMonth = fileDate[0:7]
 
 	//generate fileName
 	newFileName := fmt.Sprintf("%s-%s.%s", fileTime, md5Sum, fileType)
@@ -229,7 +235,7 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 		log.Logger.Error("Error when insert file meta data", zap.Error(err))
 		return
 	}
-	targetDir := fmt.Sprintf("./db/%s", fileDate[0:7])
+	targetDir := fmt.Sprintf("./db/%s", fileObj.FileMonth)
 	err = os.MkdirAll(targetDir, 0755)
 	if err != nil {
 		log.Logger.Error(fmt.Sprintf("Error when mkdir %s", targetDir))
