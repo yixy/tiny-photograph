@@ -2,6 +2,7 @@
 CREATE TABLE if not exists file_obj_t (
     md5_hex varchar(32) not null,
     file_name varchar(2000) not null,
+    file_type varchar(20) not null,
     file_extension varchar(20),
     file_time varchar(19) not null,
     file_date varchar(10) not null,

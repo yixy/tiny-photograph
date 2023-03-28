@@ -125,18 +125,29 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	var fileDate, fileTime, timeOrigin string
 	ok := false
 	const FileTypeExtension = "FileTypeExtension"
+	const FileType = "FileType"
 	const DateTimeOriginal = "DateTimeOriginal"
 	const ModifyDate = "ModifyDate"
 	const CreateDate = "CreateDate"
 	const FileModifyDate = "FileModifyDate"
 
 	//get fileType
-	fileTypeExtension := fileInfo.Fields[FileTypeExtension]
-	if fileTypeExtension == nil {
+	fileTypeExtensionInfo := fileInfo.Fields[FileTypeExtension]
+	if fileTypeExtensionInfo == nil {
+		log.Logger.Error(fmt.Sprintf("%s fileTypeExtension is nil", fileName))
+		return
+	}
+	fileTypeExtension, ok := fileTypeExtensionInfo.(string)
+	if !ok {
+		log.Logger.Error(fmt.Sprintf("%s fileTypeExtension is not string", fileName))
+		return
+	}
+	fileTypeInfo := fileInfo.Fields[FileType]
+	if fileTypeInfo == nil {
 		log.Logger.Error(fmt.Sprintf("%s fileType is nil", fileName))
 		return
 	}
-	fileType, ok := fileTypeExtension.(string)
+	fileType, ok := fileTypeInfo.(string)
 	if !ok {
 		log.Logger.Error(fmt.Sprintf("%s fileType is not string", fileName))
 		return
@@ -174,7 +185,8 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 
 	now := time.Now()
 	fileObj.Md5Sum = md5Sum
-	fileObj.FileExtension = fileType
+	fileObj.FileType = fileType
+	fileObj.FileExtension = fileTypeExtension
 	fileObj.TaskId = taskId
 	fileObj.ValidFlag = 1
 	unixNano := now.UnixNano()
