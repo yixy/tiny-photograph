@@ -212,12 +212,13 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 		date = time.Now().String()
 		timeOrigin = "sysdate"
 	}
-	//TODO : data transfer
 	fileDate, ok = date.(string)
 	if !ok {
 		log.Logger.Error(fmt.Sprintf("%s fileDate is not string", fileName))
 		return
 	}
+	//ignore zone in fileDate
+	fileDate = fileDate[0:19]
 	fileDate = strings.ReplaceAll(fileDate, ":", "-")
 	fileDate = strings.ReplaceAll(fileDate, " ", "_")
 	fileTime = fileDate
