@@ -27,6 +27,8 @@ var taskId string
 var rowNumImp = 0
 var rowNumIgn = 0
 var rowTotal = 0
+var impDir *string
+var label *string
 
 // addCmd represents the add command
 var addCmd = &cobra.Command{
@@ -45,7 +47,7 @@ var addCmd = &cobra.Command{
 		taskId = time.Now().Format(time.RFC3339Nano)
 
 		// Use filepath.Walk to traverse the directory
-		err = filepath.Walk(args[0], func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(*impDir, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -195,6 +197,11 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	//TODO
 	fileObj.TimeZone = "+08:00"
 
+	//set task label
+	if *label != "" {
+		fileObj.Label = *label
+	}
+
 	//get fileTime
 	if fileInfo.Fields[DateTimeOriginal] != nil {
 		date = fileInfo.Fields[DateTimeOriginal]
@@ -279,5 +286,6 @@ func init() {
 
 	// Cobra supports local flags which will only run when this command
 	// is called directly, e.g.:
-	// addCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	impDir = addCmd.Flags().StringP("dir", "d", "", "specify import directory")
+	label = addCmd.Flags().StringP("label", "l", "", "specify task label")
 }
