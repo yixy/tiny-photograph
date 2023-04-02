@@ -106,7 +106,7 @@ var addCmd = &cobra.Command{
 		fmt.Printf("import : %10d\n", rowNumImp)
 		fmt.Printf("ignore: %10d\n", rowNumIgn)
 		fmt.Printf("other failed: %10d\n", rowTotal-rowNumImp-rowNumIgn)
-		fmt.Printf("total ignore: %10d\n", rowTotal)
+		fmt.Printf("total: %10d\n", rowTotal)
 		if err := rows.Err(); err != nil {
 			fmt.Printf("statics rows.err: %v", err)
 		}
