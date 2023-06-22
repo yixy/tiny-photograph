@@ -54,7 +54,7 @@ func (c *TypeCache) String() (result string) {
 	c.Lock()
 	defer c.Unlock()
 	for k, _ := range c.cache {
-		result = fmt.Sprintf("%s,%s", result,k)
+		result = fmt.Sprintf("%s, %s", result,k)
 	}
 	return result
 }
@@ -165,16 +165,18 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	const FileModifyDate = "FileModifyDate"
 
 	//get fileType
+	var fileTypeExtension string
 	fileTypeExtensionInfo := fileInfo.Fields[FileTypeExtension]
 	if fileTypeExtensionInfo == nil {
-		log.Logger.Error(fmt.Sprintf("%s fileTypeExtension is nil", fileName))
-		return
+		log.Logger.Warn(fmt.Sprintf("%s fileTypeExtension is nil", fileName))
+	}else {
+		var ok bool
+		fileTypeExtension, ok = fileTypeExtensionInfo.(string)
+		if !ok {
+			log.Logger.Warn(fmt.Sprintf("%s fileTypeExtension is not string", fileName))
+		}
 	}
-	fileTypeExtension, ok := fileTypeExtensionInfo.(string)
-	if !ok {
-		log.Logger.Error(fmt.Sprintf("%s fileTypeExtension is not string", fileName))
-		return
-	}
+
 	fileTypeInfo := fileInfo.Fields[FileType]
 	if fileTypeInfo == nil {
 		log.Logger.Error(fmt.Sprintf("%s fileType is nil", fileName))
@@ -186,7 +188,7 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 		return
 	}
 	if !internal.IsTypeMatched(strings.ToLower(fileType)) {
-		log.Logger.Error(fmt.Sprintf("%s fileType is not matched", fileName))
+		log.Logger.Warn(fmt.Sprintf("%s fileType is not matched: %s", fileName, fileType))
 		rowNumMatch++
 
 		// 缓存类型
