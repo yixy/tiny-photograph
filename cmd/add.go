@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/barasher/go-exiftool"
@@ -24,11 +25,39 @@ import (
 )
 
 var taskId string
+var cache = NewTypeCache()
+var rowNumMatch = 0
 var rowNumImp = 0
 var rowNumIgn = 0
 var rowTotal = 0
 var impDir *string
 var label *string
+
+type TypeCache struct {
+	cache map[string]bool
+	sync.Mutex
+}
+
+func NewTypeCache() *TypeCache {
+	return &TypeCache{
+		cache: make(map[string]bool),
+	}
+}
+
+func (c *TypeCache) Add(t string) {
+	c.Lock()
+	defer c.Unlock()
+	c.cache[t] = true
+}
+
+func (c *TypeCache) String() (result string) {
+	c.Lock()
+	defer c.Unlock()
+	for k, _ := range c.cache {
+		result = fmt.Sprintf("%s,%s", result,k)
+	}
+	return result
+}
 
 // addCmd represents the add command
 var addCmd = &cobra.Command{
@@ -107,8 +136,10 @@ var addCmd = &cobra.Command{
 		fmt.Printf("--------------------\n")
 		fmt.Printf("import : %10d\n", rowNumImp)
 		fmt.Printf("ignore: %10d\n", rowNumIgn)
-		fmt.Printf("other failed: %10d\n", rowTotal-rowNumImp-rowNumIgn)
+		fmt.Printf("not matched: %10d\n", rowNumMatch)
+		fmt.Printf("other failed: %10d\n", rowTotal-rowNumImp-rowNumIgn-rowNumMatch)
 		fmt.Printf("total: %10d\n", rowTotal)
+		fmt.Printf("not matched type: %s \n",cache.String())
 		if err := rows.Err(); err != nil {
 			fmt.Printf("statics rows.err: %v", err)
 		}
@@ -156,6 +187,10 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	}
 	if !internal.IsTypeMatched(strings.ToLower(fileType)) {
 		log.Logger.Error(fmt.Sprintf("%s fileType is not matched", fileName))
+		rowNumMatch++
+
+		// 缓存类型
+		cache.Add(fileType)
 		return
 	}
 
@@ -177,7 +212,7 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	fileObj := new(model.FileObj)
 	err = fileObj.Get(ctx, md5Sum)
 	if err == nil {
-		log.Logger.Error(fmt.Sprintf("file exist: %v", fileName))
+		log.Logger.Info(fmt.Sprintf("file exist: %v", fileName))
 		rowNumIgn++
 		return
 	} else if err != sql.ErrNoRows {
@@ -224,10 +259,15 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 		log.Logger.Error(fmt.Sprintf("%s fileDate is not string", fileName))
 		return
 	}
+	if len(fileDate)<19{
+		log.Logger.Error(fmt.Sprintf("%s fileDate format error, less than 19: %s", fileName,fileDate))
+		return
+	}
 	//ignore zone in fileDate
 	fileDate = fileDate[0:19]
 	fileDate = strings.ReplaceAll(fileDate, ":", "-")
 	fileDate = strings.ReplaceAll(fileDate, " ", "_")
+	fileDate = strings.ReplaceAll(fileDate, ".", "-")
 	fileTime = fileDate
 	fileDate = fileDate[0:10]
 	fileObj.TimeOrigin = timeOrigin
