@@ -66,7 +66,8 @@ var addCmd = &cobra.Command{
 	Long:  `specify a directory to add files by date and update metadata`,
 	Run: func(cmd *cobra.Command, args []string) {
 
-		et, err := exiftool.NewExiftool()
+		buf := make([]byte, 128*1000)
+		et, err := exiftool.NewExiftool(exiftool.Buffer(buf, 64*1000))
 		if err != nil {
 			log.Logger.Error("Error when initializing", zap.Error(err))
 			return
