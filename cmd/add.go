@@ -32,6 +32,7 @@ var rowNumIgn = 0
 var rowTotal = 0
 var impDir *string
 var label *string
+var fileMonth *bool
 
 type TypeCache struct {
 	cache map[string]bool
@@ -277,6 +278,13 @@ func dealFile(fileInfo exiftool.FileMetadata, baseName string, fileName string) 
 	fileObj.FileTime = fileTime
 	fileObj.FileDate = fileDate
 	fileObj.FileMonth = fileDate[0:7]
+	if *fileMonth{
+		// 获取上层目录名
+		dirName := filepath.Dir(fileName)
+		// 获取上层目录名的最后一个元素
+		_, dir := filepath.Split(dirName)
+		fileObj.FileMonth=dir
+	}
 
 	//generate fileName
 	newFileName := fmt.Sprintf("%s-%s.%s", fileTime, md5Sum, fileType)
@@ -331,4 +339,5 @@ func init() {
 	// is called directly, e.g.:
 	impDir = addCmd.Flags().StringP("dir", "d", "", "specify import directory")
 	label = addCmd.Flags().StringP("label", "l", "", "specify task label")
+	fileMonth = addCmd.Flags().BoolP("month", "m", false, "specify file month by dir")
 }
